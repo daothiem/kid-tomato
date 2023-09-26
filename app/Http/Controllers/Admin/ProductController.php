@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Color;
 use App\Models\Product;
+use App\Models\productDetail;
+use App\Models\Size;
 use App\Models\Url;
 use \Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -24,9 +27,13 @@ class ProductController extends Controller
 
     public function create() {
         $categories = Category::all();
+        $sizes = Size::all();
+        $colors = Color::all();
         $category_html = \App\Helper\StringHelper::getSelectOption($categories, '', 'Vui lòng chọn', false, false);
+        $sizes_html = \App\Helper\StringHelper::getSelectOption($sizes, '', 'Vui lòng chọn', false, false, 'name');
+        $colors_html = \App\Helper\StringHelper::getSelectOption($colors, '', 'Vui lòng chọn', false, false, 'name');
 
-        return view('admin.product.create', compact('category_html'));
+        return view('admin.product.create', compact('category_html', 'sizes_html', 'colors_html'));
     }
 
     public function store(Request $request) {
@@ -49,6 +56,16 @@ class ProductController extends Controller
             $product = Product::create($input);
             $product->categories()->sync($input['category_id']);
             $product->tags()->sync($input['tags']);
+            foreach ($input['size_id'] as $sizeId) {
+                foreach ($input['color_id'] as $colorId) {
+                    $detail['product_id'] = $product->id;
+                    $detail['size_id'] = (integer)$sizeId;
+                    $detail['color_id'] = (integer)$colorId;
+                    $detail['quantity'] = $input['quantity'];
+
+                    ProductDetail::create($detail);
+                }
+            }
 
             $url['module'] = 'Products';
             $url['alias'] = $input['alias'];
@@ -67,14 +84,33 @@ class ProductController extends Controller
 
         if (isset($product)) {
             $categories = Category::all();
+            $sizes = Size::all();
+            $colors = Color::all();
             $categoriesTemp = $product->categories()->select('categories.id as category_id')->get()->toArray();
+            $sizesTemp = $product->sizes()->select('product_details.size_id as size_id')->get()->toArray();
+            $colorTemp = $product->colors()->select('product_details.color_id as color_id')->get()->toArray();
             $categoriesSelected = [];
             foreach ($categoriesTemp as $categoryId) {
                 $categoriesSelected[] = $categoryId['category_id'];
             }
-            $category_html = \App\Helper\StringHelper::getSelectOption($categories,$categoriesSelected , 'Vui lòng chọn', false, false);
+            $sizesSelected = [];
+            foreach ($sizesTemp as $size) {
+                $sizesSelected[] = $size['size_id'];
+            }
+            $sizesSelected = array_unique($sizesSelected);
 
-            return view('admin.product.create', compact('category_html', 'product'));
+            $colorsSelected = [];
+            foreach ($colorTemp as $color) {
+                $colorsSelected[] = $color['color_id'];
+            }
+            $sizesSelected = array_unique($sizesSelected);
+            $colorsSelected = array_unique($colorsSelected);
+
+            $category_html = \App\Helper\StringHelper::getSelectOption($categories,$categoriesSelected , 'Vui lòng chọn', false, false);
+            $sizes_html = \App\Helper\StringHelper::getSelectOption($sizes,$sizesSelected , 'Vui lòng chọn', false, false, 'name');
+            $colors_html = \App\Helper\StringHelper::getSelectOption($colors,$colorsSelected , 'Vui lòng chọn', false, false, 'name');
+
+            return view('admin.product.create', compact('category_html', 'product', 'colors_html', 'sizes_html'));
         } else {
             return redirect()->route('admin.products.index')->with('error','Sản phẩm không tồn tại');
         }
@@ -109,11 +145,25 @@ class ProductController extends Controller
                 $product->update($input);
                 $product->categories()->sync($input['category_id']);
                 $product->tags()->sync($input['tags']);
+                $product->sizes->each->delete();
+                $product->colors->each->delete();
+
+                foreach ($input['size_id'] as $sizeId) {
+                    foreach ($input['color_id'] as $colorId) {
+                        $detail['product_id'] = $product->id;
+                        $detail['size_id'] = (integer)$sizeId;
+                        $detail['color_id'] = (integer)$colorId;
+                        $detail['quantity'] = $input['quantity'] ?? 0;
+
+                        ProductDetail::create($detail);
+                    }
+                }
 
                 DB::commit();
                 return redirect()->route('admin.products.index')->with('success','Cập nhật sản phẩm thành công');
             } catch (\Exception $e) {
                 DB::rollBack();
+                dd($e);
                 return redirect()->route('admin.products.index')->with('error','Cập nhật sản phẩn không thành công');
             }
         } else {

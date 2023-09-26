@@ -30,4 +30,13 @@ class Product extends Model
     {
         return $this->belongsTo(User::class, 'created_by', 'id');
     }
+
+    public function sizes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProductDetail::class, 'product_id', 'id');
+    }
+
+    public function colors() {
+        return $this->hasMany(ProductDetail::class, 'product_id', 'id');
+    }
 }
